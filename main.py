@@ -1,41 +1,34 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
 from routers import auth, students
 
-# ✅ Import models BEFORE create_all
-import models.user     # noqa
-import models.student  # noqa
+from dotenv import load_dotenv
 
-# ✅ Create tables
+import models.user     
+import models.student  
+
+load_dotenv()
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 Base.metadata.create_all(bind=engine)
 
-# ✅ Initialize FastAPI app
-app = FastAPI(
-    title="Student Management API",
-    version="1.0.0"
-)
-
-# ✅ CORS configuration (IMPORTANT FIX)
-origins = [
-    "http://localhost:5173",
-    "http://localhost:5174",  # ✅ your current React port
-]
+app = FastAPI(title="Student Management API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # allowed frontend URLs
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
-    allow_methods=["*"],         # allow all HTTP methods
-    allow_headers=["*"],         # allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ✅ Include routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(students.router, prefix="/students", tags=["Students"])
 
-# ✅ Test route
 @app.get("/")
 def root():
     return {"message": "Student API is running"}
