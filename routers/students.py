@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 
 from database import get_db
@@ -23,8 +24,10 @@ def get_student(
     current_user = Depends(get_current_user)
 ):
     student = db.query(Student).filter(Student.id == student_id).first()
+
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+
     return student
 
 @router.post("/", status_code=201, response_model=StudentResponse)
@@ -33,10 +36,20 @@ def create_student(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    student = Student(**data.dict())
-    db.add(student)
-    db.commit()
-    db.refresh(student)
+    student = Student(**data.model_dump())
+
+    try:
+        db.add(student)
+        db.commit()
+        db.refresh(student)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
+
     return student
 
 @router.put("/{student_id}", response_model=StudentResponse)
@@ -47,6 +60,7 @@ def update_student(
     current_user = Depends(get_current_user)
 ):
     student = db.query(Student).filter(Student.id == student_id).first()
+
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
@@ -54,8 +68,18 @@ def update_student(
     student.age = data.age
     student.email = data.email
     student.city = data.city
-    db.commit()
-    db.refresh(student)
+
+    try:
+        db.commit()
+        db.refresh(student)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
+
     return student
 
 @router.delete("/{student_id}")
@@ -65,9 +89,11 @@ def delete_student(
     current_user = Depends(get_current_user)
 ):
     student = db.query(Student).filter(Student.id == student_id).first()
+
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
     db.delete(student)
     db.commit()
+
     return {"message": f"Student '{student.name}' deleted"}
